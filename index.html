@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Torque Unit Converter</title>
+    <style>
+        :root{
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --muted: #4a5568;
+            --accent: #3182ce;
+            --accent-strong: #2b6cb0;
+            --shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        [data-theme='dark']{
+            --bg:#0b1220; --card:#0f1724; --muted:#cbd5e1; --accent:#63b3ed; --accent-strong:#90cdf4; --shadow: none;
+            color: var(--muted);
+        }
+        html,body{height:100%;}
+        body{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color:var(--bg);
+            margin:0;padding:20px;display:flex;align-items:center;justify-content:center;min-height:100vh;
+        }
+        .converter-box{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:24px;width:100%;max-width:480px;box-sizing:border-box}
+        h1{font-size:20px;margin:0 0 14px;text-align:center;color:var(--accent-strong)}
+        .input-group{margin-bottom:16px}
+        label{display:block;margin-bottom:8px;font-weight:600;color:var(--muted);font-size:14px}
+        input[type=number], select{width:100%;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-size:16px;box-sizing:border-box}
+        input[type=number]:focus, select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(49,130,206,0.08)}
+        .controls{display:flex;gap:8px;margin-top:12px}
+        button{background:var(--accent);color:white;border:none;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+        button.secondary{background:#edf2f7;color:#1a202c}
+        .result-card{background:#ebf8ff;border-left:4px solid var(--accent);padding:12px;border-radius:0 8px 8px 0;margin-top:14px}
+        .result-item{display:flex;justify-content:space-between;align-items:center;margin:8px 0;font-size:16px;color:#2d3748}
+        .result-value{font-weight:700;color:var(--accent-strong);font-size:16px}
+        .meta{display:flex;gap:8px;align-items:center;margin-top:8px}
+        .theme-toggle{margin-left:auto;background:transparent;color:var(--accent);border:1px solid transparent;padding:6px 8px;border-radius:8px}
+        .sr-only{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+        footer{font-size:12px;color:var(--muted);text-align:center;margin-top:10px}
+    </style>
+</head>
+<body>
+<div class="converter-box" id="app" data-theme="light">
+    <h1>Torque Unit Converter</h1>
+
+    <div class="input-group">
+        <label for="nmInput">Input in N·m (Newton-meters)</label>
+        <input id="nmInput" type="number" inputmode="decimal" step="any" placeholder="Enter a value" aria-describedby="inputHelp">
+        <div id="inputHelp" class="sr-only">Enter a numeric value in newton-meters. Results update automatically.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="precision">Decimal places</label>
+        <select id="precision" aria-label="Decimal places">
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="6">6</option>
+        </select>
+    </div>
+
+    <div class="controls">
+        <button id="copyBtn" type="button">Copy results</button>
+        <button id="clearBtn" type="button" class="secondary">Clear</button>
+        <button id="themeBtn" type="button" class="secondary theme-toggle" aria-pressed="false">Dark</button>
+    </div>
+
+    <div class="result-card" aria-live="polite" aria-atomic="true">
+        <div class="result-item">
+            <div>lbf·in</div>
+            <div class="result-value" id="lbfInResult">0</div>
+        </div>
+        <div class="result-item">
+            <div>lbf·ft</div>
+            <div class="result-value" id="lbfFtResult">0</div>
+        </div>
+        <div class="result-item">
+            <div>Notes</div>
+            <div style="color:var(--muted);font-size:13px">1 N·m ≈ 0.73756215 lbf·ft</div>
+        </div>
+    </div>
+
+    <footer>Converted and formatted using your browser locale.</footer>
+</div>
+
+<script>
+(function(){
+    const nmInput = document.getElementById('nmInput');
+    const lbfInResult = document.getElementById('lbfInResult');
+    const lbfFtResult = document.getElementById('lbfFtResult');
+    const precisionSelect = document.getElementById('precision');
+    const copyBtn = document.getElementById('copyBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const themeBtn = document.getElementById('themeBtn');
+    const app = document.getElementById('app');
+
+    // Conversion constants
+    const NM_TO_LBFT = 0.737562149277; // 1 N·m = 0.737562149277 lbf·ft
+    const NM_TO_LBIN = NM_TO_LBFT * 12; // lbf·in
+
+    // Format number according to locale and precision, trimming unnecessary zeros
+    function formatNumber(value, digits){
+        if (!isFinite(value)) return '—';
+        const opts = {minimumFractionDigits:0, maximumFractionDigits: digits};
+        // Use Intl.NumberFormat to respect user locale
+        const nf = new Intl.NumberFormat(navigator.language || 'en-US', opts);
+        return nf.format(roundTo(value, digits));
+    }
+
+    function roundTo(value, digits){
+        const factor = Math.pow(10, digits);
+        return Math.round(value * factor) / factor;
+    }
+
+    function updateResults(){
+        const raw = nmInput.value;
+        const nm = parseFloat(raw);
+        const digits = parseInt(precisionSelect.value, 10) || 3;
+
+        if (raw === '' || isNaN(nm)){
+            lbfInResult.textContent = '0';
+            lbfFtResult.textContent = '0';
+            return;
+        }
+
+        const lbfIn = nm * NM_TO_LBIN;
+        const lbfFt = nm * NM_TO_LBFT;
+
+        lbfInResult.textContent = formatNumber(lbfIn, digits);
+        lbfFtResult.textContent = formatNumber(lbfFt, digits);
+    }
+
+    // Copy both results to clipboard
+    async function copyResults(){
+        const text = `Input: ${nmInput.value || '0'} N·m\n` +
+                     `lbf·in: ${lbfInResult.textContent}\n` +
+                     `lbf·ft: ${lbfFtResult.textContent}`;
+        try{
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = 'Copied!';
+            setTimeout(()=> copyBtn.textContent = 'Copy results', 1200);
+        }catch(e){
+            // Fallback: select and prompt
+            alert('Copy failed. Please select results and copy manually.');
+        }
+    }
+
+    function clearInput(){
+        nmInput.value = '';
+        updateResults();
+        nmInput.focus();
+    }
+
+    function toggleTheme(){
+        const current = app.getAttribute('data-theme') || 'light';
+        const next = current === 'light' ? 'dark' : 'light';
+        app.setAttribute('data-theme', next);
+        themeBtn.setAttribute('aria-pressed', next === 'dark');
+        themeBtn.textContent = next === 'dark' ? 'Light' : 'Dark';
+    }
+
+    // Event listeners
+    nmInput.addEventListener('input', updateResults);
+    precisionSelect.addEventListener('change', updateResults);
+    copyBtn.addEventListener('click', copyResults);
+    clearBtn.addEventListener('click', clearInput);
+    themeBtn.addEventListener('click', toggleTheme);
+
+    // Initialize
+    // Use placeholder example value if you want to show non-zero results on load — leave empty by default
+    updateResults();
+
+    // Accessibility: allow Enter on Copy button when focused via keyboard
+    copyBtn.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') copyResults(); });
+
+})();
+</script>
+</body>
+</html>
